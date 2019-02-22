@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -8,14 +9,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	yaml "gopkg.in/yaml.v2"
 )
 
 type FakeMoogsoftServer struct {
 	engine         *gin.Engine
 	server         *httptest.Server
 	token          string
-	ReceivedEvents []PrometheusEvent
+	ReceivedEvents []MoogsoftEvent
 }
 
 func (fms *FakeMoogsoftServer) Start() {
@@ -25,16 +25,16 @@ func (fms *FakeMoogsoftServer) Start() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	fms.token = fmt.Sprintf("%d", rand.Intn(9999))
-	fms.ReceivedEvents = []PrometheusEvent{}
+	fms.ReceivedEvents = []MoogsoftEvent{}
 
 	fms.engine.POST(fms.GetEventsEndpoint(), func(c *gin.Context) {
 		if c.GetHeader("Authorization") == fmt.Sprintf("Basic %s", fms.token) {
 			rawBody, _ := c.GetRawData()
 
-			var prometheusEvent PrometheusEvent
-			yaml.Unmarshal(rawBody, &prometheusEvent)
+			var moogsoftPayload MoogsoftPayload
+			json.Unmarshal(rawBody, &moogsoftPayload)
 
-			fms.ReceivedEvents = append(fms.ReceivedEvents, prometheusEvent)
+			fms.ReceivedEvents = append(fms.ReceivedEvents, moogsoftPayload.Events[0])
 
 			c.String(http.StatusOK, "")
 		} else {
