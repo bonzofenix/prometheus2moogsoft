@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 // Moogsoft client
@@ -20,6 +22,7 @@ type PrometheusPayload struct {
 type PrometheusAlert struct {
 	Labels      map[string]string `json:"labels"`
 	Annotations map[string]string `json:"annotations"`
+	StartsAt    string            `json:"startsAt"`
 }
 
 type MoogsoftEvent struct {
@@ -51,37 +54,26 @@ type MoogsoftPayload struct {
 }
 
 func (c *Client) SendEvents(payload string, token string) (int, error) {
+	var moogsoftEvents []MoogsoftEvent
 	var prometheusPayload PrometheusPayload
+
 	err := json.Unmarshal([]byte(payload), &prometheusPayload)
 	if err != nil {
 		return 500, err
 	}
 
-	moogsoftEvent := MoogsoftEvent{}
+	for _, alert := range prometheusPayload.Alerts {
+		event, err := eventFor(alert)
 
-	alert := prometheusPayload.Alerts[0]
-	switch service := alert.Labels["service"]; service {
-	case "bosh-job":
-		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s/%s/%s/%s/%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_job_az"], alert.Labels["bosh_deployment"], alert.Labels["bosh_job_name"], alert.Labels["bosh_job_index"])
-		moogsoftEvent.AgentTime = "1540313079"
-		moogsoftEvent.SourceId = fmt.Sprintf("%s-%s", moogsoftEvent.AgentTime, moogsoftEvent.Signature)
-		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s/%s", alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_deployment"])
-		moogsoftEvent.Manager = alert.Labels["bosh_job_id"]
-		moogsoftEvent.Class = fmt.Sprintf("%s/%s", alert.Labels["environment"], alert.Labels["bosh_job_az"])
-		moogsoftEvent.Type = alert.Labels["alertname"]
-		moogsoftEvent.Severity = 4
-		moogsoftEvent.Description = alert.Annotations["description"]
-		moogsoftEvent.AonXMattersGroupName = "xmatter-group-id"
-		moogsoftEvent.AonToolUrl = "https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
-		moogsoftEvent.AonJSONVersion = "2"
+		if err != nil {
+			return 500, err
+		}
 
-	case "prometheus":
-		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
-
+		moogsoftEvents = append(moogsoftEvents, event)
 	}
 
 	moogsoftPayload := MoogsoftPayload{
-		Events: []MoogsoftEvent{moogsoftEvent},
+		Events: moogsoftEvents,
 	}
 	rawData, err := json.Marshal(moogsoftPayload)
 	if err != nil {
@@ -101,4 +93,36 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 	}
 
 	return res.StatusCode, err
+}
+
+func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
+	moogsoftEvent := MoogsoftEvent{}
+	moogsoftEvent.Description = alert.Annotations["description"]
+
+	agentTime, err := time.Parse(time.RFC3339Nano, alert.StartsAt)
+	if err != nil {
+		return MoogsoftEvent{}, err
+	}
+
+	moogsoftEvent.AgentTime = strconv.FormatInt(agentTime.Unix(), 10)
+
+	switch service := alert.Labels["service"]; service {
+	case "bosh-deployment", "bosh-job", "bosh-job-process":
+		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s/%s/%s/%s/%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_job_az"], alert.Labels["bosh_deployment"], alert.Labels["bosh_job_name"], alert.Labels["bosh_job_index"])
+		moogsoftEvent.SourceId = fmt.Sprintf("%s-%s", moogsoftEvent.AgentTime, moogsoftEvent.Signature)
+		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s/%s", alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_deployment"])
+		moogsoftEvent.Manager = alert.Labels["bosh_job_id"]
+		moogsoftEvent.Class = fmt.Sprintf("%s/%s", alert.Labels["environment"], alert.Labels["bosh_job_az"])
+		moogsoftEvent.Type = service
+		moogsoftEvent.Severity = 4
+		moogsoftEvent.AonXMattersGroupName = "xmatter-group-id"
+		moogsoftEvent.AonToolUrl = "https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+		moogsoftEvent.AonJSONVersion = "2"
+
+	case "prometheus":
+		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
+
+	}
+
+	return moogsoftEvent, nil
 }

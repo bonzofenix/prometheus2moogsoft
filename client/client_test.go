@@ -1,6 +1,7 @@
 package client_test
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -41,6 +42,8 @@ var _ = Describe("Client", func() {
         "description":"some alert description",
         "summary":" some alert summary"
       }`
+
+			token = moogsoftServer.GetToken()
 		})
 
 		JustBeforeEach(func() {
@@ -64,13 +67,13 @@ var _ = Describe("Client", func() {
               }
             ]
           }`
-			statusCode, err = client.SendEvents(prometheusEvent, token)
 		})
 
 		Context("when using the wrong credentials", func() {
 			BeforeEach(func() { token = "wrong-token" })
 
 			It("Should not return an error with 401 anauthorized", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
 				Expect(err).Should(BeNil())
 				Expect(statusCode).Should(Equal(http.StatusForbidden))
 			})
@@ -80,11 +83,14 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() { token = moogsoftServer.GetToken() })
 
 			It("Should return connect to moogsoft server", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
 				Expect(err).Should(BeNil())
 				Expect(statusCode).Should(Equal(http.StatusOK))
 			})
+		})
 
-			Context("when receiving bosh alerts", func() {
+		for _, service := range [...]string{"bosh-deployment", "bosh-job", "bosh-job-process"} {
+			Context(fmt.Sprintf("when receiving %s alert from the bosh_exporter", service), func() {
 				BeforeEach(func() {
 					labels = `{
             "alertname":"BoshJobUnhealthy",
@@ -98,7 +104,7 @@ var _ = Describe("Client", func() {
             "bosh_job_az": "az1",
             "bosh_job_ip": "1.2.3.4",
             "severity":"warning",
-            "service": "bosh-job"
+            "service": "` + service + `"
           }`
 
 					annotations = ` {
@@ -108,6 +114,7 @@ var _ = Describe("Client", func() {
 				})
 
 				It("Should parse warnings and send event", func() {
+					statusCode, err = client.SendEvents(prometheusEvent, token)
 					Expect(err).Should(BeNil())
 					Expect(statusCode).Should(Equal(http.StatusOK))
 
@@ -120,7 +127,7 @@ var _ = Describe("Client", func() {
 					Expect(event.Manager).Should(Equal("some-job-id-uuid"))
 					Expect(event.Class).Should(Equal("test/az1"))
 					Expect(event.AgentLocation).Should(Equal(""))
-					Expect(event.Type).Should(Equal("BoshJobUnhealthy"))
+					Expect(event.Type).Should(Equal(service))
 					Expect(event.Severity).Should(Equal(4)) // 5 "critical", 4 "warning", 0 "clear"
 					Expect(event.Description).Should(Equal("BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"))
 					Expect(event.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",
@@ -137,10 +144,11 @@ var _ = Describe("Client", func() {
 
 				})
 			})
+		}
 
-			Context("when receiving prometheus alerts", func() {
-				BeforeEach(func() {
-					labels = `{
+		Context("when receiving prometheus alerts", func() {
+			BeforeEach(func() {
+				labels = `{
             "alertname":"PrometheusScrapeError",
             "bosh_deployment":"concourse",
             "instance":"1.2.3.4:9391",
@@ -148,47 +156,94 @@ var _ = Describe("Client", func() {
             "service":"prometheus",
             "severity":"warning"
           }`
-				})
+			})
 
-				It("Should parse and send event", func() {
-					Expect(err).Should(BeNil())
-					Expect(statusCode).Should(Equal(http.StatusOK))
+			It("Should parse and send event", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
+				Expect(err).Should(BeNil())
+				Expect(statusCode).Should(Equal(http.StatusOK))
 
-					Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
-					event := moogsoftServer.ReceivedEvents[0]
-					Expect(event).ShouldNot(BeNil())
+				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
+				event := moogsoftServer.ReceivedEvents[0]
+				Expect(event).ShouldNot(BeNil())
 
-					Expect(event.Signature).Should(Equal("PrometheusScrapeError::concourse/web"))
+				Expect(event.Signature).Should(Equal("PrometheusScrapeError::concourse/web"))
 
-					/*
-					   {
-					     "events": [{
-					       "signature": "MonitorClassName::MonitoredEntityName::MonitoredMetricName::DeviceHostname",
-					       "source_id": "UniqueEventID",
-					       "external_id": "DeviceIdentifier",
-					       "manager": "EventSourceName",
-					       "source": "DeviceHostname",
-					       "class": ""ExternalHosting-"HostingVendor",
-					       "agent_location": "",
-					       "type": "MonitorClassName",
-					       "severity": SeverityID,
-					       "description": "FullEventMessage",
-					       "agent_time": "TimeOfEvent",
-					       "agent": "",
+				/*
+				   {
+				     "events": [{
+				       "signature": "MonitorClassName::MonitoredEntityName::MonitoredMetricName::DeviceHostname",
+				       "source_id": "UniqueEventID",
+				       "external_id": "DeviceIdentifier",
+				       "manager": "EventSourceName",
+				       "source": "DeviceHostname",
+				       "class": ""ExternalHosting-"HostingVendor",
+				       "agent_location": "",
+				       "type": "MonitorClassName",
+				       "severity": SeverityID,
+				       "description": "FullEventMessage",
+				       "agent_time": "TimeOfEvent",
+				       "agent": "",
 
-					       "aonMetricName": "MonitoredMetricName",
-					       "aonMetricValue": "MonitoredMetricValue",
-					       "aonMonitoredEntityName": "MonitoredEntityName",
-					       "aonXMattersGroupName": "",
-					       "aonSNOWGroupName": "",
-					       "aonToolURL": "",
-					       "aonIPAddress": "",
-					       "aonIPSubnet": "",
-					       "aonJSONversion": "2"
-					     }]
-					   }
-					*/
-				})
+				       "aonMetricName": "MonitoredMetricName",
+				       "aonMetricValue": "MonitoredMetricValue",
+				       "aonMonitoredEntityName": "MonitoredEntityName",
+				       "aonXMattersGroupName": "",
+				       "aonSNOWGroupName": "",
+				       "aonToolURL": "",
+				       "aonIPAddress": "",
+				       "aonIPSubnet": "",
+				       "aonJSONversion": "2"
+				     }]
+				   }
+				*/
+			})
+		})
+
+		Context("when reciving multiple alerts in one call", func() {
+			JustBeforeEach(func() {
+				prometheusEvent = `{
+            "receiver":"default",
+            "status":"firing",
+            "groupLabels":{},
+            "commonLabels": { "severity":"warning" },
+            "commonAnnotations":{},
+            "externalURL":"https://alertmanager.your-domain.com",
+            "version":"4",
+            "groupKey":"{}:{}",
+            "alerts": [
+              {
+                "status":"firing",
+                "labels": ` + labels + `,
+                "annotations": ` + annotations + `,
+                "startsAt":"2018-10-23T16:44:39.901211833Z", 
+                "endsAt":"2018-11-07T11:45:39.901211833Z",
+                "generatorURL":"https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+              },
+              {
+                "status":"firing",
+                "labels": ` + labels + `,
+                "annotations": ` + annotations + `,
+                "startsAt":"2018-10-24T16:44:39.901211833Z", 
+                "endsAt":"2018-11-07T11:45:39.901211833Z",
+                "generatorURL":"https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+              }
+            ]
+          }`
+			})
+
+			It("Should send multiple events in the same call to moogsoft", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
+				Expect(err).Should(BeNil())
+				Expect(statusCode).Should(Equal(http.StatusOK))
+
+				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(2))
+
+				firstEvent := moogsoftServer.ReceivedEvents[0]
+				secondEvent := moogsoftServer.ReceivedEvents[1]
+
+				// Check that both event time is different
+				Expect(firstEvent.AgentTime).ShouldNot(Equal(secondEvent.AgentTime))
 			})
 		})
 	})

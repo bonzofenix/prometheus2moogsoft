@@ -34,7 +34,7 @@ func (fms *FakeMoogsoftServer) Start() {
 			var moogsoftPayload MoogsoftPayload
 			json.Unmarshal(rawBody, &moogsoftPayload)
 
-			fms.ReceivedEvents = append(fms.ReceivedEvents, moogsoftPayload.Events[0])
+			fms.ReceivedEvents = append(fms.ReceivedEvents, moogsoftPayload.Events...)
 
 			c.String(http.StatusOK, "")
 		} else {
