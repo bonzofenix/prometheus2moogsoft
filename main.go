@@ -10,7 +10,7 @@ import (
 )
 
 type Options struct {
-	Port string `short:"p" long:"prefix" description:"Port where app will be running." required:"true"`
+	Port string `short:"p" long:"prefix" description:"Port where app will be running." optional:"true"`
 }
 
 var opts Options
@@ -24,6 +24,10 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 
 	p2mServer := gin.Default()
+
+	if opts.Port == "" {
+		opts.Port = os.Getenv("PORT")
+	}
 
 	client := client.Client{
 		URL:            os.Getenv("MOOGSOFT_URL"),
