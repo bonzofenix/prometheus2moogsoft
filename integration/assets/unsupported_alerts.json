@@ -1,0 +1,30 @@
+{
+	"receiver":"default",
+	"status":"firing",
+	"alerts": [ 
+		{ 
+			"status":"firing",
+			"labels": {
+				"alertname":"SomeAlert",
+				"service":"some-alert-service",
+				"severity":"warning"
+			},
+			"annotations": {
+				"description":"some machine 1.2.3.4:3000  is down",
+				"summary":"Prometheus instance 1.2.3.4:9391 (scrape job concourse) down or not reachable"
+			},
+			"startsAt":"2018-10-23T16:44:39.901211833Z",
+			"endsAt":"2018-11-07T11:45:39.901211833Z",
+			"generatorURL":"https://prometheus.sys.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+		}
+	],
+	"groupLabels":{},
+	"commonLabels":
+	{
+	"severity":"warning"
+	},
+	"commonAnnotations":{},
+	"externalURL":"https://alertmanager.sys.cf-dev.your-domain.com",
+	"version":"4",
+	"groupKey":"{}:{}"
+}

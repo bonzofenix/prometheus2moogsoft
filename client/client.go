@@ -3,7 +3,9 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -64,9 +66,8 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 
 	for _, alert := range prometheusPayload.Alerts {
 		event, err := eventFor(alert)
-
 		if err != nil {
-			return 500, err
+			log.Println(err.Error())
 		}
 
 		moogsoftEvents = append(moogsoftEvents, event)
@@ -96,8 +97,8 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 }
 
 func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
+	var err error
 	moogsoftEvent := MoogsoftEvent{}
-	moogsoftEvent.Description = alert.Annotations["description"]
 
 	agentTime, err := time.Parse(time.RFC3339Nano, alert.StartsAt)
 	if err != nil {
@@ -105,6 +106,7 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	}
 
 	moogsoftEvent.AgentTime = strconv.FormatInt(agentTime.Unix(), 10)
+	moogsoftEvent.Description = alert.Annotations["description"]
 
 	switch service := alert.Labels["service"]; service {
 	case "bosh-deployment", "bosh-job", "bosh-job-process":
@@ -122,7 +124,11 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	case "prometheus":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
 
+	default:
+		err = errors.New(fmt.Sprintf("Unsopported service: %s", service))
+		moogsoftEvent.Severity = 4
+		moogsoftEvent.Type = service
 	}
 
-	return moogsoftEvent, nil
+	return moogsoftEvent, err
 }

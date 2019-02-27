@@ -1,0 +1,49 @@
+{
+	"receiver":"default",
+	"status":"firing",
+	"alerts": [ 
+		{ 
+			"status":"firing",
+			"labels": {
+				"alertname":"PrometheusScrapeError",
+				"bosh_deployment":"concourse",
+				"instance":"10.198.159.80:9391",
+				"job":"concourse",
+				"service":"prometheus",
+				"severity":"warning"
+			},
+			"annotations": {
+				"description":"The Prometheus instance at 1.2.3.4:9391 for scrape job concourse has been down or has not been reachable during the last 15m",
+				"summary":"Prometheus instance 1.2.3.4:9391 (scrape job concourse) down or not reachable"
+			},
+			"startsAt":"2018-10-23T16:44:39.901211833Z",
+			"endsAt":"2018-11-07T11:45:39.901211833Z",
+			"generatorURL":"https://prometheus.sys.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+		},{
+			"status":"firing",
+			"labels": {
+				"alertname":"FirehoseExporterLastEnvelopeReceivedTooOld",
+				"environment":"dev",
+				"instance":"10.198.159.97:9186",
+				"service":"firehose-exporter",
+				"severity":"warning"
+			},
+			"annotations": {
+				"description":"The firehose_exporter at dev/1.2.3.4:9186 last Envelope received was more than 10m 0s ago",
+				"summary":"firehose_exporter dev/1.2.3.4:9186 last Envelope received \u003e 10m 0s ago"
+			},
+			"startsAt":"2018-11-04T01:05:42.982578054Z",
+			"endsAt":"2018-11-07T11:44:42.982578054Z",
+			"generatorURL":"https://prometheus.sys.cf-dev.your-domain.com/graph?g0.expr=%28time%28%29+-+max+by%28environment%2C+instance%29+%28firehose_last_envelope_received_timestamp%29%29+%3E+600\u0026g0.tab=1"
+		}
+	],
+	"groupLabels":{},
+	"commonLabels":
+	{
+	"severity":"warning"
+	},
+	"commonAnnotations":{},
+	"externalURL":"https://alertmanager.sys.cf-dev.your-domain.com",
+	"version":"4",
+	"groupKey":"{}:{}"
+}

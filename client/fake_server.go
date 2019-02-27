@@ -43,6 +43,10 @@ func (fms *FakeMoogsoftServer) Start() {
 	})
 }
 
+func (fms *FakeMoogsoftServer) Stop() {
+	fms.server.Close()
+}
+
 func (fms *FakeMoogsoftServer) URL() string {
 	return fms.server.URL
 }

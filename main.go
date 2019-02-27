@@ -1,40 +1,50 @@
 package main
 
 import (
-	"io/ioutil"
+	"fmt"
+	"os"
 
-	. "github.com/bonzofenix/prometheus2moogsoft/client"
+	"github.com/bonzofenix/prometheus2moogsoft/client"
 	"github.com/gin-gonic/gin"
+	flags "github.com/jessevdk/go-flags"
 )
 
-type Config struct {
-	Moogsoft struct {
-		Endpoint string `yaml:"endpoint"`
-		Token    string `yaml:"token"`
-	} `yaml:"moogsoft"`
+type Options struct {
+	Port string `short:"p" long:"prefix" description:"Port where app will be running." required:"true"`
 }
 
+var opts Options
+
 func main() {
-	moaccServer := gin.Defaults()
-
-	var config Config
-
-	_, err := ioutil.ReadFile("config.yaml")
-	if err != nil {
-		config = parseYAML("../config.yaml")
-	} else {
-		config = parseYAML("config.yaml")
+	if _, err := flags.Parse(&opts); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(3)
 	}
 
-	client := Client{
-		Endpoint: config.Moogsoft.Endpoint,
-		Token:    config.Moogsoft.Token,
+	gin.SetMode(gin.ReleaseMode)
+
+	p2mServer := gin.Default()
+
+	client := client.Client{
+		URL:            os.Getenv("MOOGSOFT_URL"),
+		EventsEndpoint: os.Getenv("MOOGSOFT_ENDPOINT"),
 	}
 
-	moaccServer.POST("/prometheus_webhook_event", func(c *gin.Context) {
-		Moogsoft.post("")
-		c.String(200, "events sent")
+	token := os.Getenv("MOOGSOFT_TOKEN")
+
+	p2mServer.POST("/prometheus_webhook_event", func(c *gin.Context) {
+		body, _ := c.GetRawData()
+
+		responseCode, err := client.SendEvents(string(body), token)
+
+		if err != nil {
+			c.String(responseCode, err.Error())
+
+			fmt.Println(err.Error())
+		} else {
+			c.String(responseCode, "events sent")
+		}
 	})
 
-	moaccServer.Run(":3000")
+	p2mServer.Run(fmt.Sprintf(":%s", opts.Port))
 }
