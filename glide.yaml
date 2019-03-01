@@ -1,2 +1,4 @@
 package: github.com/bonzofenix/prometheus2moogsoft
-import: []
+import:
+- package: github.com/jessevdk/go-flags
+  version: ^1.4.0

@@ -1,5 +1,5 @@
-hash: 3e4dfc68ab1514dbf051a7a2349a28cf40150aa8dda9e90b6f5ad06a94c77d71
-updated: 2019-02-06T14:39:08.125064+09:00
+hash: 03ed89ddbba55ac4b8ba4cab73f33d8eda90af677075d30d18faae71127145ce
+updated: 2019-02-28T21:16:58.547434-03:00
 imports:
 - name: github.com/gin-contrib/sse
   version: a7658810eb745c2f22927282dea478278103a897
@@ -13,6 +13,8 @@ imports:
   version: c823c79ea1570fb5ff454033735a8e68575d1d0f
   subpackages:
   - proto
+- name: github.com/jessevdk/go-flags
+  version: c6ca198ec95c841fdb89fc0de7496fed11ab854e
 - name: github.com/json-iterator/go
   version: f64ce68b6eea7b957a0d0d43e224dfe491b0babe
 - name: github.com/mattn/go-isatty
@@ -65,6 +67,8 @@ testImports:
   version: 5533ce8a0da374da682cd53d70ddcc54adf1a710
   subpackages:
   - format
+  - gbytes
+  - gexec
   - internal/assertion
   - internal/asyncassertion
   - internal/oraclematcher
