@@ -35,7 +35,18 @@ func main() {
 	}
 
 	token := os.Getenv("MOOGSOFT_TOKEN")
+	redactedToken := ""
+	if token != "" {
+		redactedToken = "[REDACTED]"
+	}
 
+	p2mServer.GET("/info", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"moogsoft_url":             client.URL,
+			"moogsoft_events_endpoint": client.EventsEndpoint,
+			"moogsoft_token":           redactedToken,
+		})
+	})
 	p2mServer.POST("/prometheus_webhook_event", func(c *gin.Context) {
 		body, _ := c.GetRawData()
 
