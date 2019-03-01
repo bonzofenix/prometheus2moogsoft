@@ -107,6 +107,10 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 
 	moogsoftEvent.AgentTime = strconv.FormatInt(agentTime.Unix(), 10)
 	moogsoftEvent.Description = alert.Annotations["description"]
+	moogsoftEvent.AonXMattersGroupName = "xmatter-group-id"
+	moogsoftEvent.AonToolUrl = "https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+	moogsoftEvent.AonJSONVersion = "2"
+	moogsoftEvent.Type = service
 
 	switch service := alert.Labels["service"]; service {
 	case "bosh-deployment", "bosh-job", "bosh-job-process":
@@ -115,11 +119,7 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s/%s", alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_deployment"])
 		moogsoftEvent.Manager = alert.Labels["bosh_job_id"]
 		moogsoftEvent.Class = fmt.Sprintf("%s/%s", alert.Labels["environment"], alert.Labels["bosh_job_az"])
-		moogsoftEvent.Type = service
 		moogsoftEvent.Severity = 4
-		moogsoftEvent.AonXMattersGroupName = "xmatter-group-id"
-		moogsoftEvent.AonToolUrl = "https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
-		moogsoftEvent.AonJSONVersion = "2"
 
 	case "prometheus":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
@@ -127,7 +127,6 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	default:
 		err = errors.New(fmt.Sprintf("Unsopported service: %s", service))
 		moogsoftEvent.Severity = 4
-		moogsoftEvent.Type = service
 	}
 
 	return moogsoftEvent, err
