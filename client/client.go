@@ -91,6 +91,7 @@ type MoogsoftEvent struct {
 func (c *Client) SendEvents(payload string, token string) (int, error) {
 	var moogsoftEvents []MoogsoftEvent
 	var prometheusPayload PrometheusPayload
+	log.Println("Received payload: ", payload)
 
 	err := json.Unmarshal([]byte(payload), &prometheusPayload)
 	if err != nil {
@@ -101,7 +102,6 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 		event, err := c.eventFor(alert)
 		if err != nil {
 			log.Println(err.Error())
-			log.Println("Received payload: ", payload)
 		}
 
 		moogsoftEvents = append(moogsoftEvents, event)
