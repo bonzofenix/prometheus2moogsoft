@@ -75,6 +75,7 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 		event, err := c.eventFor(alert)
 		if err != nil {
 			log.Println(err.Error())
+			log.Println("Received payload: ", payload)
 		}
 
 		moogsoftEvents = append(moogsoftEvents, event)
@@ -135,7 +136,7 @@ func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 
 	default:
 		err = errors.New(fmt.Sprintf("Unsopported service: %s", service))
-		moogsoftEvent.Severity = 4
+		moogsoftEvent.Severity = 1
 		moogsoftEvent.Type = service
 	}
 

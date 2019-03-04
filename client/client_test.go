@@ -92,6 +92,12 @@ var _ = Describe("Client", func() {
 			})
 		})
 
+		Context("when receiving cf alert from the cf_exporter", func() {
+		})
+
+		Context("when receiving cf alert from the cf_exporter", func() {
+		})
+
 		for _, service := range [...]string{"bosh-deployment", "bosh-job", "bosh-job-process"} {
 			Context(fmt.Sprintf("when receiving %s alert from the bosh_exporter", service), func() {
 				BeforeEach(func() {
