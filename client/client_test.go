@@ -32,14 +32,18 @@ var _ = Describe("Client", func() {
 	Context("#SendEvents", func() {
 		var token string
 		var labels string
+		var status string
 		var annotations string
 		var statusCode int
 		var err error
 
 		BeforeEach(func() {
 			labels = `{ 
-            "alertname":"SomeAlert"
+            "alertname":"SomeAlert",
+            "service": "prometheus"
       }`
+
+			status = "firing"
 
 			annotations = `{
         "description":"some alert description",
@@ -61,7 +65,7 @@ var _ = Describe("Client", func() {
             "groupKey":"{}:{}",
             "alerts": [
               {
-                "status":"firing",
+                "status": "` + status + `",
                 "labels": ` + labels + `,
                 "annotations": ` + annotations + `,
                 "startsAt":"2018-10-23T16:44:39.901211833Z", 
@@ -92,10 +96,47 @@ var _ = Describe("Client", func() {
 			})
 		})
 
-		Context("when receiving cf alert from the cf_exporter", func() {
-		})
+		Context("when alert gets resolved", func() {
+			BeforeEach(func() { status = "resolved" })
 
+			It("Should send severity 0", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
+				Expect(err).Should(BeNil())
+				Expect(statusCode).Should(Equal(http.StatusOK))
+
+				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
+				event := moogsoftServer.ReceivedEvents[0]
+				Expect(event).ShouldNot(BeNil())
+				Expect(event.Severity).Should(Equal(CLEAR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
+			})
+
+		})
 		Context("when receiving cf alert from the cf_exporter", func() {
+			BeforeEach(func() {
+				labels = `{
+            "alertname":"",
+            "bosh_deployment": "",
+            "instance": "",
+            "job": "",
+            "service": "",
+            "severity":""
+          }`
+
+				annotations = ` {
+					  "summary": "BOSH Job test/test-director/cf/cc/0 is unhealthy",
+					  "description": "BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"
+					}`
+			})
+
+			XIt("Should parse warnings and send event", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
+				Expect(err).Should(BeNil())
+				Expect(statusCode).Should(Equal(http.StatusOK))
+
+				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
+				event := moogsoftServer.ReceivedEvents[0]
+				Expect(event).ShouldNot(BeNil())
+			})
 		})
 
 		for _, service := range [...]string{"bosh-deployment", "bosh-job", "bosh-job-process"} {
@@ -136,7 +177,7 @@ var _ = Describe("Client", func() {
 					Expect(event.Manager).Should(Equal("Prometheus"))
 					Expect(event.Class).Should(Equal("PCF"))
 					Expect(event.Type).Should(Equal(service))
-					Expect(event.Severity).Should(Equal(4)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
+					Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 					Expect(event.Description).Should(Equal("BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"))
 					Expect(event.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",
 					Expect(event.Agent).Should(Equal("dev"))
