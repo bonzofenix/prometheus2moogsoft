@@ -22,8 +22,10 @@ var _ = Describe("Client", func() {
 		moogsoftServer.Start()
 
 		client = Client{
-			URL:            moogsoftServer.URL(),
-			EventsEndpoint: moogsoftServer.GetEventsEndpoint(),
+			URL:               moogsoftServer.URL(),
+			EventsEndpoint:    moogsoftServer.GetEventsEndpoint(),
+			Env:               "dev",
+			XMattersGroupName: "xmatter-group-id",
 		}
 	})
 
@@ -38,6 +40,7 @@ var _ = Describe("Client", func() {
 			labels = `{ 
             "alertname":"SomeAlert"
       }`
+
 			annotations = `{
         "description":"some alert description",
         "summary":" some alert summary"
@@ -121,27 +124,26 @@ var _ = Describe("Client", func() {
 					Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
 					event := moogsoftServer.ReceivedEvents[0]
 					Expect(event).ShouldNot(BeNil())
-					Expect(event.Signature).Should(Equal("BoshJobUnhealthy::test/test-director/az1/cf/cc/0"))
-					Expect(event.SourceId).Should(Equal("1540313079-BoshJobUnhealthy::test/test-director/az1/cf/cc/0")) // timestamp + signature
+					Expect(event.Signature).Should(Equal("BoshJobUnhealthy::test::test-director::az1::cf::cc::0"))
+					Expect(event.SourceId).Should(Equal("")) // timestamp + signature
 					Expect(event.ExternalId).Should(Equal("test/test-director/cf"))
-					Expect(event.Manager).Should(Equal("some-job-id-uuid"))
-					Expect(event.Class).Should(Equal("test/az1"))
-					Expect(event.AgentLocation).Should(Equal(""))
+					Expect(event.Manager).Should(Equal("Prometheus"))
+					Expect(event.Class).Should(Equal("PCF"))
 					Expect(event.Type).Should(Equal(service))
-					Expect(event.Severity).Should(Equal(4)) // 5 "critical", 4 "warning", 0 "clear"
+					Expect(event.Severity).Should(Equal(4)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 					Expect(event.Description).Should(Equal("BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"))
 					Expect(event.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",
-					Expect(event.Agent).Should(Equal(""))
-					Expect(event.AonMetricName).Should(Equal(""))
-					Expect(event.AonMetricValue).Should(Equal(""))
-					Expect(event.AonMonitoredEntityName).Should(Equal(""))
+					Expect(event.Agent).Should(Equal("dev"))
+					Expect(event.AgentLocation).Should(Equal(""))          // Geographic location of prometheus
+					Expect(event.AonMetricName).Should(Equal(""))          // disk percent
+					Expect(event.AonMetricValue).Should(Equal(""))         // value of disk percent
+					Expect(event.AonMonitoredEntityName).Should(Equal("")) // D:/ | linux mount path
 					Expect(event.AonXMattersGroupName).Should(Equal("xmatter-group-id"))
 					Expect(event.AonSNOWGroupName).Should(Equal(""))
 					Expect(event.AonToolUrl).Should(Equal("https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"))
-					Expect(event.AonIPAddress).Should(Equal(""))
-					Expect(event.AonIPSubnet).Should(Equal(""))
+					Expect(event.AonIPAddress).Should(Equal("1.2.3.4")) // ip address to the machine where the disk event
+					Expect(event.AonIPSubnet).Should(Equal(""))         // can be empty
 					Expect(event.AonJSONVersion).Should(Equal("2"))
-
 				})
 			})
 		}

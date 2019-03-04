@@ -13,20 +13,31 @@ import (
 
 // Moogsoft client
 type Client struct {
-	URL            string
-	EventsEndpoint string
+	Env               string
+	URL               string
+	EventsEndpoint    string
+	XMattersGroupName string
 }
 
+// INPUT
 type PrometheusPayload struct {
 	Alerts []PrometheusAlert `json:"alerts"`
 }
 
+// INPUT
 type PrometheusAlert struct {
-	Labels      map[string]string `json:"labels"`
-	Annotations map[string]string `json:"annotations"`
-	StartsAt    string            `json:"startsAt"`
+	Labels       map[string]string `json:"labels"`
+	Annotations  map[string]string `json:"annotations"`
+	StartsAt     string            `json:"startsAt"`
+	GeneratorURL string            `json:"generatorURL"`
 }
 
+//OUTPUT
+type MoogsoftPayload struct {
+	Events []MoogsoftEvent `json:"events"`
+}
+
+//OUTPUT
 type MoogsoftEvent struct {
 	Signature              string `json:"signature"`
 	Source                 string `json:"source"`
@@ -44,15 +55,11 @@ type MoogsoftEvent struct {
 	AonMetricValue         string `json:"aonMetricValue"`
 	AonMonitoredEntityName string `json:"aonMonitoredEntityName"`
 	AonXMattersGroupName   string `json:"aonXMattersGroupName"`
-	AonSNOWGroupName       string `json:"aonSNOWGroupName"`
-	AonToolUrl             string `json:"aonToolURL"`
+	AonSNOWGroupName       string `json:"aonSNOWGroupName"` //empty
+	AonToolUrl             string `json:"aonToolURL"`       // prometheus url
 	AonIPAddress           string `json:"aonIPAddress"`
 	AonIPSubnet            string `json:"aonIPSubnet"`
 	AonJSONVersion         string `json:"aonJSONversion"`
-}
-
-type MoogsoftPayload struct {
-	Events []MoogsoftEvent `json:"events"`
 }
 
 func (c *Client) SendEvents(payload string, token string) (int, error) {
@@ -65,7 +72,7 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 	}
 
 	for _, alert := range prometheusPayload.Alerts {
-		event, err := eventFor(alert)
+		event, err := c.eventFor(alert)
 		if err != nil {
 			log.Println(err.Error())
 		}
@@ -96,9 +103,9 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 	return res.StatusCode, err
 }
 
-func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
-	var err error
+func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	moogsoftEvent := MoogsoftEvent{}
+	var err error
 
 	agentTime, err := time.Parse(time.RFC3339Nano, alert.StartsAt)
 	if err != nil {
@@ -107,19 +114,21 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 
 	moogsoftEvent.AgentTime = strconv.FormatInt(agentTime.Unix(), 10)
 	moogsoftEvent.Description = alert.Annotations["description"]
-	moogsoftEvent.AonXMattersGroupName = "xmatter-group-id"
-	moogsoftEvent.AonToolUrl = "https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
-	moogsoftEvent.AonJSONVersion = "2"
-	moogsoftEvent.Type = service
 
 	switch service := alert.Labels["service"]; service {
 	case "bosh-deployment", "bosh-job", "bosh-job-process":
-		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s/%s/%s/%s/%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_job_az"], alert.Labels["bosh_deployment"], alert.Labels["bosh_job_name"], alert.Labels["bosh_job_index"])
-		moogsoftEvent.SourceId = fmt.Sprintf("%s-%s", moogsoftEvent.AgentTime, moogsoftEvent.Signature)
+		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s::%s::%s::%s::%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_job_az"], alert.Labels["bosh_deployment"], alert.Labels["bosh_job_name"], alert.Labels["bosh_job_index"])
+		moogsoftEvent.SourceId = ""
 		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s/%s", alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_deployment"])
-		moogsoftEvent.Manager = alert.Labels["bosh_job_id"]
-		moogsoftEvent.Class = fmt.Sprintf("%s/%s", alert.Labels["environment"], alert.Labels["bosh_job_az"])
+		moogsoftEvent.Manager = "Prometheus"
+		moogsoftEvent.Class = "PCF"
+		moogsoftEvent.Type = service
+		moogsoftEvent.Agent = c.Env
 		moogsoftEvent.Severity = 4
+		moogsoftEvent.AonIPAddress = alert.Labels["bosh_job_ip"]
+		moogsoftEvent.AonXMattersGroupName = c.XMattersGroupName
+		moogsoftEvent.AonToolUrl = "https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"
+		moogsoftEvent.AonJSONVersion = "2"
 
 	case "prometheus":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
@@ -127,6 +136,7 @@ func eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	default:
 		err = errors.New(fmt.Sprintf("Unsopported service: %s", service))
 		moogsoftEvent.Severity = 4
+		moogsoftEvent.Type = service
 	}
 
 	return moogsoftEvent, err

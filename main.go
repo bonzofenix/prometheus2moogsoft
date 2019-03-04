@@ -30,8 +30,10 @@ func main() {
 	}
 
 	client := client.Client{
-		URL:            os.Getenv("MOOGSOFT_URL"),
-		EventsEndpoint: os.Getenv("MOOGSOFT_ENDPOINT"),
+		Env:               os.Getenv("MOOGSOFT_ENV"),
+		URL:               os.Getenv("MOOGSOFT_URL"),
+		EventsEndpoint:    os.Getenv("MOOGSOFT_ENDPOINT"),
+		XMattersGroupName: os.Getenv("XMATTERS_GROUP_NAME"),
 	}
 
 	token := os.Getenv("MOOGSOFT_TOKEN")
@@ -47,6 +49,7 @@ func main() {
 			"moogsoft_token":           redactedToken,
 		})
 	})
+
 	p2mServer.POST("/prometheus_webhook_event", func(c *gin.Context) {
 		body, _ := c.GetRawData()
 
