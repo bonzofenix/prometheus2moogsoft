@@ -83,11 +83,6 @@ var _ = Describe("Prometheus2Moogsoft", func() {
 				POST("http://localhost:3000/prometheus_webhook_event", prometheusPayload)
 				Eventually(moogsoftServer.ReceivedEvents, "2s").Should(HaveLen(1))
 			})
-
-			It("Should log the alert as unsopported", func() {
-				session.Kill()
-				Expect(string(session.Wait().Out.Contents()[:])).Should(ContainSubstring("Unsopported parsed service: some-alert-service"))
-			})
 		})
 	})
 

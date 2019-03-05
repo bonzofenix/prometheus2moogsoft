@@ -11,7 +11,26 @@ import (
 	. "github.com/bonzofenix/prometheus2moogsoft/client"
 )
 
+func assertEventCommonFields(e MoogsoftEvent) {
+	ExpectWithOffset(1, e).ShouldNot(BeNil())
+	ExpectWithOffset(1, e.AgentLocation).Should(Equal(""))          // Geographic location of prometheus
+	ExpectWithOffset(1, e.AonMetricName).Should(Equal(""))          // disk percent
+	ExpectWithOffset(1, e.AonMetricValue).Should(Equal(""))         // value of disk percent
+	ExpectWithOffset(1, e.AonMonitoredEntityName).Should(Equal("")) // D:/ | linux mount path
+	ExpectWithOffset(1, e.Agent).Should(Equal("dev"))
+	ExpectWithOffset(1, e.AonXMattersGroupName).Should(Equal("xmatter-group-id"))
+	ExpectWithOffset(1, e.AonSNOWGroupName).Should(Equal(""))
+	ExpectWithOffset(1, e.Manager).Should(Equal("Prometheus"))
+	ExpectWithOffset(1, e.Class).Should(Equal("PCF"))
+	ExpectWithOffset(1, e.AonIPSubnet).Should(Equal("")) // can be empty
+	ExpectWithOffset(1, e.SourceId).Should(Equal(""))    // timestamp + signature
+	ExpectWithOffset(1, e.AonToolUrl).Should(Equal("https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"))
+	ExpectWithOffset(1, e.AonJSONVersion).Should(Equal("2"))
+	ExpectWithOffset(1, e.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",
+}
+
 var _ = Describe("Client", func() {
+
 	var prometheusEvent string
 	var client Client
 	var moogsoftServer FakeMoogsoftServer
@@ -39,8 +58,9 @@ var _ = Describe("Client", func() {
 
 		BeforeEach(func() {
 			labels = `{ 
-            "alertname":"SomeAlert",
-            "service": "prometheus"
+            "alertname": "SomeAlert",
+            "service": "prometheus",
+            "severity":"warning"
       }`
 
 			status = "firing"
@@ -114,28 +134,35 @@ var _ = Describe("Client", func() {
 		Context("when receiving cf alert from the cf_exporter", func() {
 			BeforeEach(func() {
 				labels = `{
-            "alertname":"",
-            "bosh_deployment": "",
-            "instance": "",
-            "job": "",
-            "service": "",
-            "severity":""
+            "alertname":"CFRoutesNotBeingRegistered",
+            "bosh_deployment":"cf-123",
+            "environment":"dev",
+            "service": "cf",
+            "severity":"warning"
           }`
 
 				annotations = ` {
-					  "summary": "BOSH Job test/test-director/cf/cc/0 is unhealthy",
-					  "description": "BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"
+					  "summary": "number of routes too low in dev/cf-123",
+					  "description": "There has been only 0 routes in the routing table at CF dev/cf-123 during the last 5m"
 					}`
 			})
 
-			XIt("Should parse warnings and send event", func() {
+			It("Should parse warnings and send event", func() {
 				statusCode, err = client.SendEvents(prometheusEvent, token)
 				Expect(err).Should(BeNil())
 				Expect(statusCode).Should(Equal(http.StatusOK))
 
 				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
 				event := moogsoftServer.ReceivedEvents[0]
-				Expect(event).ShouldNot(BeNil())
+				assertEventCommonFields(event)
+
+				Expect(event.Signature).Should(Equal("CFRoutesNotBeingRegistered::dev::cf-123"))
+				Expect(event.Type).Should(Equal("cf"))
+
+				Expect(event.ExternalId).Should(Equal("dev/cf-123"))
+				Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
+				Expect(event.Description).Should(Equal("There has been only 0 routes in the routing table at CF dev/cf-123 during the last 5m"))
+				Expect(event.AonIPAddress).Should(Equal("")) // ip address to the machine where the disk event
 			})
 		})
 
@@ -170,27 +197,15 @@ var _ = Describe("Client", func() {
 
 					Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
 					event := moogsoftServer.ReceivedEvents[0]
-					Expect(event).ShouldNot(BeNil())
+					assertEventCommonFields(event)
+
 					Expect(event.Signature).Should(Equal("BoshJobUnhealthy::test::test-director::az1::cf::cc::0"))
-					Expect(event.SourceId).Should(Equal("")) // timestamp + signature
-					Expect(event.ExternalId).Should(Equal("test/test-director/cf"))
-					Expect(event.Manager).Should(Equal("Prometheus"))
-					Expect(event.Class).Should(Equal("PCF"))
 					Expect(event.Type).Should(Equal(service))
+					Expect(event.ExternalId).Should(Equal("test/test-director/cf"))
 					Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 					Expect(event.Description).Should(Equal("BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"))
 					Expect(event.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",
-					Expect(event.Agent).Should(Equal("dev"))
-					Expect(event.AgentLocation).Should(Equal(""))          // Geographic location of prometheus
-					Expect(event.AonMetricName).Should(Equal(""))          // disk percent
-					Expect(event.AonMetricValue).Should(Equal(""))         // value of disk percent
-					Expect(event.AonMonitoredEntityName).Should(Equal("")) // D:/ | linux mount path
-					Expect(event.AonXMattersGroupName).Should(Equal("xmatter-group-id"))
-					Expect(event.AonSNOWGroupName).Should(Equal(""))
-					Expect(event.AonToolUrl).Should(Equal("https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"))
 					Expect(event.AonIPAddress).Should(Equal("1.2.3.4")) // ip address to the machine where the disk event
-					Expect(event.AonIPSubnet).Should(Equal(""))         // can be empty
-					Expect(event.AonJSONVersion).Should(Equal("2"))
 				})
 			})
 		}
@@ -214,38 +229,11 @@ var _ = Describe("Client", func() {
 
 				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
 				event := moogsoftServer.ReceivedEvents[0]
-				Expect(event).ShouldNot(BeNil())
 
-				Expect(event.Signature).Should(Equal("PrometheusScrapeError::concourse/web"))
+				assertEventCommonFields(event)
 
-				/*
-				   {
-				     "events": [{
-				       "signature": "MonitorClassName::MonitoredEntityName::MonitoredMetricName::DeviceHostname",
-				       "source_id": "UniqueEventID",
-				       "external_id": "DeviceIdentifier",
-				       "manager": "EventSourceName",
-				       "source": "DeviceHostname",
-				       "class": ""ExternalHosting-"HostingVendor",
-				       "agent_location": "",
-				       "type": "MonitorClassName",
-				       "severity": SeverityID,
-				       "description": "FullEventMessage",
-				       "agent_time": "TimeOfEvent",
-				       "agent": "",
-
-				       "aonMetricName": "MonitoredMetricName",
-				       "aonMetricValue": "MonitoredMetricValue",
-				       "aonMonitoredEntityName": "MonitoredEntityName",
-				       "aonXMattersGroupName": "",
-				       "aonSNOWGroupName": "",
-				       "aonToolURL": "",
-				       "aonIPAddress": "",
-				       "aonIPSubnet": "",
-				       "aonJSONversion": "2"
-				     }]
-				   }
-				*/
+				Expect(event.Signature).Should(Equal("PrometheusScrapeError::concourse::web"))
+				Expect(event.Type).Should(Equal("prometheus"))
 			})
 		})
 

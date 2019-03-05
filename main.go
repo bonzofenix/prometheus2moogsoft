@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/bonzofenix/prometheus2moogsoft/client"
@@ -21,6 +22,7 @@ func main() {
 		os.Exit(3)
 	}
 
+	log.SetOutput(os.Stdout)
 	gin.SetMode(gin.ReleaseMode)
 
 	p2mServer := gin.Default()

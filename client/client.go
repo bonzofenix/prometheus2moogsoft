@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -23,17 +24,6 @@ const (
 
 func (s Severity) String() string {
 	return [...]string{"CLEAR", "INDETERMINATE", "MINOR", "MAJOR", "CRITICAL"}[s]
-}
-
-func severityFor(prometheusSeverity string) Severity {
-	switch prometheusSeverity {
-	case "critical":
-		return CRITICAL
-	case "warning":
-		return MAJOR
-	default:
-		return INDETERMINATE
-	}
 }
 
 // Moogsoft client
@@ -56,6 +46,32 @@ type PrometheusAlert struct {
 	Annotations  map[string]string `json:"annotations"`
 	StartsAt     string            `json:"startsAt"`
 	GeneratorURL string            `json:"generatorURL"`
+}
+
+func (a PrometheusAlert) GetSeverity() Severity {
+	alertStatus := fmt.Sprintf("%s-%s", a.Status, a.Labels["severity"])
+
+	switch alertStatus {
+	case "firing-warning":
+		return MAJOR
+	case "firing-critical":
+		return CRITICAL
+	case "resolved-warning":
+		return CLEAR
+	case "resolved-critical":
+		return CLEAR
+	default:
+		return INDETERMINATE
+	}
+}
+
+func (a PrometheusAlert) GetAgentTime() string {
+	agentTime, err := time.Parse(time.RFC3339Nano, a.StartsAt)
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	return strconv.FormatInt(agentTime.Unix(), 10)
 }
 
 //OUTPUT
@@ -91,7 +107,9 @@ type MoogsoftEvent struct {
 func (c *Client) SendEvents(payload string, token string) (int, error) {
 	var moogsoftEvents []MoogsoftEvent
 	var prometheusPayload PrometheusPayload
-	log.Println("Received payload: ", payload)
+	if os.Getenv("DEBUG") != "" {
+		log.Println("Received payload: ", payload)
+	}
 
 	err := json.Unmarshal([]byte(payload), &prometheusPayload)
 	if err != nil {
@@ -131,45 +149,38 @@ func (c *Client) SendEvents(payload string, token string) (int, error) {
 }
 
 func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
-	moogsoftEvent := MoogsoftEvent{}
+	moogsoftEvent := MoogsoftEvent{
+		Type:                 alert.Labels["service"],
+		Description:          alert.Annotations["description"],
+		AonToolUrl:           alert.GeneratorURL,
+		AonXMattersGroupName: c.XMattersGroupName,
+		Manager:              "Prometheus",
+		Class:                "PCF",
+		Severity:             alert.GetSeverity(),
+		AonJSONVersion:       "2",
+		Agent:                c.Env,
+		AgentTime:            alert.GetAgentTime(),
+	}
+
 	var err error
 
-	agentTime, err := time.Parse(time.RFC3339Nano, alert.StartsAt)
-	if err != nil {
-		return MoogsoftEvent{}, err
-	}
-
-	moogsoftEvent.AgentTime = strconv.FormatInt(agentTime.Unix(), 10)
-	moogsoftEvent.Description = alert.Annotations["description"]
-	moogsoftEvent.AonToolUrl = alert.GeneratorURL
-	moogsoftEvent.AonXMattersGroupName = c.XMattersGroupName
-	moogsoftEvent.Manager = "Prometheus"
-	moogsoftEvent.Class = "PCF"
-
-	switch status := alert.Status; status {
-	case "firing":
-		moogsoftEvent.Severity = severityFor(alert.Labels["severity"])
-	case "resolved":
-		moogsoftEvent.Severity = CLEAR
-	}
-
-	switch service := alert.Labels["service"]; service {
+	switch moogsoftEvent.Type {
 	case "bosh-deployment", "bosh-job", "bosh-job-process":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s::%s::%s::%s::%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_job_az"], alert.Labels["bosh_deployment"], alert.Labels["bosh_job_name"], alert.Labels["bosh_job_index"])
 		moogsoftEvent.SourceId = ""
 		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s/%s", alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_deployment"])
-		moogsoftEvent.Type = service
-		moogsoftEvent.Agent = c.Env
 		moogsoftEvent.AonIPAddress = alert.Labels["bosh_job_ip"]
-		moogsoftEvent.AonJSONVersion = "2"
 
 	case "prometheus":
-		moogsoftEvent.Signature = fmt.Sprintf("%s::%s/%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
+		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s", alert.Labels["alertname"], alert.Labels["bosh_deployment"], alert.Labels["job"])
+
+	case "cf":
+		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_deployment"])
+		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s", alert.Labels["environment"], alert.Labels["bosh_deployment"])
 
 	default:
-		err = errors.New(fmt.Sprintf("Unsopported service: %s", service))
+		err = errors.New(fmt.Sprintf("Unsopported service: %s", moogsoftEvent.Type))
 		moogsoftEvent.Severity = 1
-		moogsoftEvent.Type = service
 	}
 
 	return moogsoftEvent, err
