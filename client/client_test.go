@@ -159,7 +159,7 @@ var _ = Describe("Client", func() {
 				Expect(event.Signature).Should(Equal("CFRoutesNotBeingRegistered::dev::cf-123"))
 				Expect(event.Type).Should(Equal("cf"))
 
-				Expect(event.ExternalId).Should(Equal("dev/cf-123"))
+				Expect(event.ExternalId).Should(Equal(event.Signature))
 				Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 				Expect(event.Description).Should(Equal("There has been only 0 routes in the routing table at CF dev/cf-123 during the last 5m"))
 				Expect(event.AonIPAddress).Should(Equal("")) // ip address to the machine where the disk event
@@ -200,8 +200,9 @@ var _ = Describe("Client", func() {
 					assertEventCommonFields(event)
 
 					Expect(event.Signature).Should(Equal("BoshJobUnhealthy::test::test-director::az1::cf::cc::0"))
+					Expect(event.ExternalId).Should(Equal(event.Signature))
+
 					Expect(event.Type).Should(Equal(service))
-					Expect(event.ExternalId).Should(Equal("test/test-director/cf"))
 					Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 					Expect(event.Description).Should(Equal("BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"))
 					Expect(event.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",

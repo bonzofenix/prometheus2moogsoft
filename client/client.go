@@ -168,7 +168,6 @@ func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	case "bosh-deployment", "bosh-job", "bosh-job-process":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s::%s::%s::%s::%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_job_az"], alert.Labels["bosh_deployment"], alert.Labels["bosh_job_name"], alert.Labels["bosh_job_index"])
 		moogsoftEvent.SourceId = ""
-		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s/%s", alert.Labels["environment"], alert.Labels["bosh_name"], alert.Labels["bosh_deployment"])
 		moogsoftEvent.AonIPAddress = alert.Labels["bosh_job_ip"]
 
 	case "prometheus":
@@ -176,12 +175,13 @@ func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 
 	case "cf":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_deployment"])
-		moogsoftEvent.ExternalId = fmt.Sprintf("%s/%s", alert.Labels["environment"], alert.Labels["bosh_deployment"])
 
 	default:
 		err = errors.New(fmt.Sprintf("Unsopported service: %s", moogsoftEvent.Type))
 		moogsoftEvent.Severity = 1
 	}
+
+	moogsoftEvent.ExternalId = moogsoftEvent.Signature
 
 	return moogsoftEvent, err
 }
