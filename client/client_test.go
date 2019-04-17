@@ -131,6 +131,7 @@ var _ = Describe("Client", func() {
 			})
 
 		})
+
 		Context("when receiving cf alert from the cf_exporter", func() {
 			BeforeEach(func() {
 				labels = `{
@@ -235,6 +236,35 @@ var _ = Describe("Client", func() {
 
 				Expect(event.Signature).Should(Equal("PrometheusScrapeError::concourse::web"))
 				Expect(event.Type).Should(Equal("prometheus"))
+			})
+		})
+
+		Context("when undeterminate alert", func() {
+			BeforeEach(func() {
+				labels = `{
+            "foo":"bar",
+            "service": "some_service",
+            "severity":"warning"
+          }`
+
+				annotations = ` {
+					  "summary": "some error summary",
+					  "description": "some error description"
+					}`
+			})
+
+			It("Should parse warnings and send event", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
+				Expect(err).Should(BeNil())
+				Expect(statusCode).Should(Equal(http.StatusOK))
+
+				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
+				event := moogsoftServer.ReceivedEvents[0]
+				assertEventCommonFields(event)
+
+				Expect(event.ExternalId).Should(Equal(event.Description))
+				Expect(event.Severity).Should(Equal(INDETERMINATE)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
+				Expect(event.AonIPAddress).Should(Equal(""))        // ip address to the machine where the disk event
 			})
 		})
 

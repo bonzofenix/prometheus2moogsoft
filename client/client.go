@@ -178,6 +178,7 @@ func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 
 	default:
 		err = errors.New(fmt.Sprintf("Unsopported service: %s", moogsoftEvent.Type))
+		moogsoftEvent.Signature = alert.Annotations["description"]
 		moogsoftEvent.Severity = 1
 	}
 
