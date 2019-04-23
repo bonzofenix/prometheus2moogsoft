@@ -27,6 +27,7 @@ func assertEventCommonFields(e MoogsoftEvent) {
 	ExpectWithOffset(1, e.AonToolUrl).Should(Equal("https://prometheus.your-domain.com/graph?g0.expr=up+%3D%3D+0\u0026g0.tab=1"))
 	ExpectWithOffset(1, e.AonJSONVersion).Should(Equal("2"))
 	ExpectWithOffset(1, e.AgentTime).Should(Equal("1540313079")) //"startsAt":"2018-10-23T16:44:39.901211833Z",
+	ExpectWithOffset(1, e.ExternalId).Should(Equal(e.Signature))
 }
 
 var _ = Describe("Client", func() {
@@ -160,7 +161,6 @@ var _ = Describe("Client", func() {
 				Expect(event.Signature).Should(Equal("CFRoutesNotBeingRegistered::dev::cf-123"))
 				Expect(event.Type).Should(Equal("cf"))
 
-				Expect(event.ExternalId).Should(Equal(event.Signature))
 				Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 				Expect(event.Description).Should(Equal("There has been only 0 routes in the routing table at CF dev/cf-123 during the last 5m"))
 				Expect(event.AonIPAddress).Should(Equal("")) // ip address to the machine where the disk event
@@ -201,8 +201,6 @@ var _ = Describe("Client", func() {
 					assertEventCommonFields(event)
 
 					Expect(event.Signature).Should(Equal("BoshJobUnhealthy::test::test-director::az1::cf::cc::0"))
-					Expect(event.ExternalId).Should(Equal(event.Signature))
-
 					Expect(event.Type).Should(Equal(service))
 					Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
 					Expect(event.Description).Should(Equal("BOSH Job test/test-director/cf/cc/0 is being reported unhealthy"))
@@ -239,6 +237,31 @@ var _ = Describe("Client", func() {
 			})
 		})
 
+		Context("when receiving probe alerts", func() {
+			BeforeEach(func() {
+				labels = `{
+            "instance":"someuri.com:8080",
+            "service":"probe",
+            "severity":"warning",
+            "alertname":"ProbeUnsuccesful"
+          }`
+			})
+
+			It("Should parse and send event", func() {
+				statusCode, err = client.SendEvents(prometheusEvent, token)
+				Expect(err).Should(BeNil())
+				Expect(statusCode).Should(Equal(http.StatusOK))
+
+				Expect(moogsoftServer.ReceivedEvents).Should(HaveLen(1))
+				event := moogsoftServer.ReceivedEvents[0]
+
+				assertEventCommonFields(event)
+				Expect(event.Signature).Should(Equal("ProbeUnsuccesful::someuri.com:8080"))
+				Expect(event.Severity).Should(Equal(MAJOR)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
+				Expect(event.Type).Should(Equal("probe"))
+			})
+		})
+
 		Context("when undeterminate alert", func() {
 			BeforeEach(func() {
 				labels = `{
@@ -264,7 +287,6 @@ var _ = Describe("Client", func() {
 
 				Expect(event.ExternalId).Should(Equal(event.Description))
 				Expect(event.Severity).Should(Equal(INDETERMINATE)) // 5 "critical", 4 "major", 3 minor 2 warning 1 indeterminate -0 "clear"
-				Expect(event.AonIPAddress).Should(Equal(""))        // ip address to the machine where the disk event
 			})
 		})
 

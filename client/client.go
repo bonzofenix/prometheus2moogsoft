@@ -176,6 +176,9 @@ func (c *Client) eventFor(alert PrometheusAlert) (MoogsoftEvent, error) {
 	case "cf":
 		moogsoftEvent.Signature = fmt.Sprintf("%s::%s::%s", alert.Labels["alertname"], alert.Labels["environment"], alert.Labels["bosh_deployment"])
 
+	case "probe":
+		moogsoftEvent.Signature = fmt.Sprintf("%s::%s", alert.Labels["alertname"], alert.Labels["instance"])
+
 	default:
 		err = errors.New(fmt.Sprintf("Unsopported service: %s", moogsoftEvent.Type))
 		moogsoftEvent.Signature = alert.Annotations["description"]
